@@ -1,0 +1,48 @@
+services:
+  # SQL Server-compatible engine (runs on ARM + x64; same T-SQL as SQL Server).
+  sqlserver:
+    image: mcr.microsoft.com/azure-sql-edge
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-ChatApp123!}
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    # NOTE: no sqlcmd-based healthcheck here on purpose — the ARM64 build of
+    # azure-sql-edge does not ship sqlcmd, so such a check would fail forever
+    # on Apple Silicon Macs and block startup. Readiness is handled instead by
+    # the API's migration retry loop in Program.cs (image- and arch-independent).
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: "Server=sqlserver,1433;Database=ChatApp;User Id=sa;Password=${MSSQL_SA_PASSWORD:-ChatApp123!};TrustServerCertificate=True"
+      # Override in production! Must be >= 32 chars for HMAC-SHA256.
+      Jwt__Key: ${JWT_KEY:-dev-only-key-not-for-production-0123456789abcdef0123456789abcdef}
+      Jwt__Issuer: ChatApp
+      Jwt__Audience: ChatApp
+      # Seeds demo1/demo2 (password: demo1234) + a "General" channel on first run.
+      SeedDemoData: "true"
+    ports:
+      - "5000:8080"
+    # Start order only; the API retries migrations until SQL is accepting
+    # logins (see Program.cs), which also covers slow first boots under
+    # ARM64 emulation.
+    depends_on:
+      - sqlserver
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+volumes:
+  sqlserver-data:
