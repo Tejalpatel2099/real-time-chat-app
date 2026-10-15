@@ -1,0 +1,16 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+
+# Frontend
+node_modules/
+dist/
+
+# Local tooling / OS
+.vs/
+.idea/
+.DS_Store
+*.user
+appsettings.*.local.json
